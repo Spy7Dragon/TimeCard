@@ -26,8 +26,7 @@ namespace TimeCard
 
         private void btnStartNewDay_Click(object sender, EventArgs e)
         {
-
-            FrmTimeCard.Instance.Restart();
+            FrmTimeCard.Instance.StartNewDay();
             Close();
         }
 

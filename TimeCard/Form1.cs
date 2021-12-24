@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
-using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
@@ -116,7 +115,7 @@ namespace TimeCard
             dataGridView1.Sort(column, direction);
             column.HeaderCell.SortGlyphDirection = SortOrder.Descending;
 
-            // GridUpdate drop down list.
+            // Update drop down list.
             m_DropDownList.Add("Break");
             m_DropDownList.Add("Unknown");
             foreach (string item in m_WorkTable.AsEnumerable().Select(r => r.Field<string>("Description")).ToList())
@@ -147,7 +146,7 @@ namespace TimeCard
             dataGridView1.CurrentCell = null;
             if (dataGridViewCellEventArgs.ColumnIndex == 3)
             {
-                GridUpdate();
+                UpdateGui();
             }
         }
 
@@ -167,48 +166,28 @@ namespace TimeCard
         private void StartNewDay(object sender, EventArgs e)
         {
             StartNewDay();
-            Restart();
         }
 
         internal void StartNewDay()
         {
             try
             {
-                SaveActivities();
-            }
-            catch (Exception ex)
-            {
-                Logger.Log("Error while starting new day.\n" + ex.Message + "\n" + ex.StackTrace);
-            }
-
-            lblDateTime.Text = DateTime.Today.ToLongDateString();
-            txtTime.Text = "";
-            lblStatus.Text = "Daily time has not been submitted.";
-            lblStatus.BackColor = Color.Red;
-            while (m_EventList.Count > 0)
-            {
-                DeleteEvent(0);
-            }
-            ClearDataGrid();
-
-            // Remove day file.
-            try
-            {
-                RemoveDay();
+                lblDateTime.Text = DateTime.Today.ToLongDateString();
+                txtTime.Text = "";
+                lblStatus.Text = "Daily time has not been submitted.";
+                lblStatus.BackColor = Color.Red;
+                while (m_EventList.Count > 0)
+                {
+                    DeleteEvent(0);
+                }
+                ClearDataGrid();
+                SaveDay();
                 Logger.CreateNewLogger();
             }
             catch (Exception ex)
             {
                 Logger.Log("Error while starting new day.\n" + ex.Message + "\n" + ex.StackTrace);
             }
-        }
-
-        internal void Restart()
-        {  
-            string executable = Process.GetCurrentProcess().MainModule.FileName;
-            ProcessStartInfo start_info = new ProcessStartInfo(executable);
-            Process.Start(start_info);
-            Application.Exit();
         }
 
         public void ClearDataGrid()
@@ -419,20 +398,19 @@ namespace TimeCard
                 Logger.Log("Turning back color red. " + ex.Message + "\n" + ex.StackTrace);
             }
 
-            GridUpdate();
+            UpdateGui();
         }
 
         public void cmBoxActivities_TextChanged(object sender, EventArgs e)
         {
-            GridUpdate();
+            UpdateGui();
         }
 
-        public void GridUpdate()
+        public void UpdateGui()
         {
             try
             {
                 UpdateDataGrid();
-                SaveActivities();
                 SaveDay();
             }
             catch (Exception ex)
@@ -488,28 +466,6 @@ namespace TimeCard
             finally
             {
                 fs.Close();
-            }
-        }
-
-        public void RemoveDay()
-        {
-            string file_name = "Log - " + DateTime.Today.ToLongDateString() + ".bin";
-            string full_path = Path.Combine(Application.LocalUserAppDataPath, s_TimeLogPath);
-            bool exists = Directory.Exists(full_path);
-            if (!exists)
-            {
-                Directory.CreateDirectory(full_path);
-            }
-
-            string file = Path.Combine(full_path, file_name);
-            try
-            {
-                File.Delete(file);
-                Logger.Log("Deleted " + file);
-            }
-            catch (Exception e)
-            {
-                Logger.Log("Failed to delete day log. Reason: " + e.Message + "\n" + e.StackTrace);
             }
         }
 
@@ -699,12 +655,14 @@ namespace TimeCard
 
         private void btnRemoveActivity_Click(object sender, EventArgs e)
         {
-            if (dataGridView1.CurrentRow != null)
-            {
-                int index = dataGridView1.CurrentRow.Index;
-                string description = m_WorkTable.Rows[index]["Description"].ToString();
-                m_WorkTable.Rows[index].Delete();
+            if (dataGridView1.SelectedRows.Count > 0)
+            { 
+                var row = dataGridView1.SelectedRows[0];
+                DataRow data_row = ((DataRowView) row.DataBoundItem).Row;
+                string description = data_row["Description"].ToString();
+                dataGridView1.Rows.Remove(row);
                 m_DropDownList.Remove(description);
+                UpdateGui();
             }
             SaveActivities();
         }
@@ -737,26 +695,7 @@ namespace TimeCard
             BinaryFormatter bf = new BinaryFormatter();
             try
             {
-                // Create check marks
-                List<Tuple<string, bool>> check_marks = new List<Tuple<string, bool>>();
-
-                foreach (DataRow row in m_WorkTable.AsEnumerable())
-                {
-                    string description = row["Description"].ToString();
-                    bool split = false;
-                    try
-                    {
-                        split = (bool)row["Split"];
-                    }
-                    catch (Exception)
-                    {
-                        // ignored
-                    }
-                    check_marks.Add(new Tuple<string, bool>(description, split));
-                }
-
-                List<object> objects = new List<object> {m_WorkTable, check_marks};
-                bf.Serialize(fs, objects);
+                bf.Serialize(fs, m_WorkTable);
             }
             catch (Exception e)
             {
@@ -783,36 +722,7 @@ namespace TimeCard
             BinaryFormatter bf = new BinaryFormatter();
             try
             {
-                fs.Position = 0;
-                object deserialized = bf.Deserialize(fs);
-
-                if (deserialized.GetType() == typeof(DataTable))
-                {
-                    m_WorkTable = (DataTable) deserialized;
-                }
-                else if (deserialized.GetType() == typeof(List<object>))
-                {
-                    List<object> objects = (List<object>) deserialized;
-                    m_WorkTable = (DataTable)objects[0];
-                    List<Tuple<string, bool>> check_marks = (List<Tuple<string, bool>>)objects[1];
-
-                    // Insert check marks.
-                    foreach (Tuple<string, bool> pair in check_marks)
-                    {
-                        string search = String.Format("Description = '{0}'", pair.Item1);
-                        DataRow row = m_WorkTable.Select(search)[0];
-
-                        try
-                        {
-                            row["Split"] = pair.Item2;
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Log("Unable to load split check for " + pair.Item1
-                                       + ex.Message + "\n" + ex.StackTrace);
-                        }
-                    }
-                }
+                m_WorkTable = (DataTable) bf.Deserialize(fs);
             }
             catch (Exception e)
             {

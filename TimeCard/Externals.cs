@@ -222,7 +222,7 @@ namespace TimeCard
                         }
                     }
  
-                    // GridUpdate row on matches.
+                    // Update row on matches.
                     if (match != null)
                     {
                         Logger.Log("Starting match: " + match);
@@ -236,7 +236,8 @@ namespace TimeCard
                         if (hours != "0.0")
                         {
                             Logger.Log("Inserting " + hours + " into row " + count + " of " + match);
-                            ClearAndSend(tds[count], hours);
+                            ClearElement(tds[count]);
+                            SendKeysToElement(hours, tds[count]);
                         }
                     }
                 }
@@ -303,13 +304,6 @@ namespace TimeCard
             return succesfully_submitted;
         }
 
-        private static void ClearAndSend(IWebElement webElement, string keys)
-        {
-            webElement.Click();
-            IJavaScriptExecutor js = (IJavaScriptExecutor) Driver;
-            js.ExecuteScript("arguments[0].value = arguments[1];", webElement, keys);
-        }
-
         private static IWebElement GetElement(string xpath)
         {
             WebDriverWait submit_wait = new WebDriverWait(Driver, TimeSpan.FromSeconds(60.0));
@@ -319,14 +313,18 @@ namespace TimeCard
 
         private static void ClearElement(IWebElement element)
         {
-            Actions actions = new Actions(Driver);
-            actions.MoveToElement(element);
-            actions.Click();
-            // Diffent ways to clear.
-            actions.KeyDown(OpenQA.Selenium.Keys.Control).SendKeys("a");
-            actions.SendKeys(OpenQA.Selenium.Keys.Delete);
-            actions.SendKeys(OpenQA.Selenium.Keys.Clear);
-            actions.Build().Perform();
+            while (element.Text != "")
+            {
+                Actions actions = new Actions(Driver);
+                actions.MoveToElement(element);
+                actions.Click();
+                // Diffent ways to clear.
+                actions.SendKeys(OpenQA.Selenium.Keys.Clear);
+                actions.SendKeys(OpenQA.Selenium.Keys.Delete);
+                actions.SendKeys(OpenQA.Selenium.Keys.Backspace);
+
+                actions.Build().Perform();
+            }
         }
 
         private static void SendKeysToElement(string keys, IWebElement element)

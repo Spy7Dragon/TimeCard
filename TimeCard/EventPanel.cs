@@ -51,19 +51,10 @@ namespace TimeCard
             txtNextTime.Dispose();
             m_Parent.Controls.Remove(btnNextAdd);
             btnNextAdd.Dispose();
+            
 
-            int top_row_index = 2 * Index + 1;
-            int bottom_row_index = 2 * Index + 2;
-            if (m_Parent.RowStyles.Count > top_row_index
-                && top_row_index >= 0)
-            {
-                m_Parent.RowStyles.RemoveAt(top_row_index);
-            }
-            if (m_Parent.RowStyles.Count > bottom_row_index
-                && bottom_row_index >= 0)
-            {
-                m_Parent.RowStyles.RemoveAt(bottom_row_index);
-            }
+            m_Parent.RowStyles.RemoveAt(2 * Index + 1);
+            m_Parent.RowStyles.RemoveAt(2 * Index + 2);
         }
 
         public void MoveDown()
